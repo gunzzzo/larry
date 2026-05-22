@@ -40,6 +40,7 @@
             left: 50px;
             border-radius: 5px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: transform 0.05s;
         }
 
         .obstacle {
@@ -67,6 +68,15 @@
             left: 20px;
             font-size: 24px;
             font-weight: bold;
+            color: #333;
+            z-index: 100;
+        }
+
+        #difficulty {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            font-size: 16px;
             color: #333;
             z-index: 100;
         }
@@ -106,10 +116,49 @@
             border-radius: 5px;
             cursor: pointer;
             transition: background 0.3s;
+            margin-right: 10px;
         }
 
         #restartBtn:hover {
             background: #764ba2;
+        }
+
+        #pauseBtn {
+            position: absolute;
+            top: 20px;
+            right: 120px;
+            padding: 10px 20px;
+            font-size: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        #pauseBtn:hover {
+            background: #764ba2;
+        }
+
+        #pauseScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            z-index: 200;
+        }
+
+        #pauseScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #667eea;
         }
 
         #instructions {
@@ -132,17 +181,34 @@
             background: linear-gradient(180deg, #8B7355, #654321);
             border-top: 2px solid #333;
         }
+
+        .shake {
+            animation: shake 0.2s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(-5px, 0); }
+            75% { transform: translate(5px, 0); }
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <div class="ground"></div>
         <div id="score">Score: 0</div>
+        <div id="difficulty">Difficulty: 1.0x</div>
+        <button id="pauseBtn">Pause (P)</button>
         <div id="instructions">
-            <strong>SPACE</strong> or <strong>CLICK</strong> to Jump<br>
+            <strong>SPACE</strong>, <strong>CLICK</strong>, or <strong>TOUCH</strong> to Jump<br>
+            <strong>P</strong> to Pause<br>
             Avoid obstacles!
         </div>
         <div id="player"></div>
+        <div id="pauseScreen">
+            <h1>PAUSED</h1>
+            <p>Press P or click to resume</p>
+        </div>
         <div id="gameOver">
             <h1>GAME OVER</h1>
             <p>Final Score: <span id="finalScore">0</span></p>
@@ -151,23 +217,39 @@
     </div>
 
     <script>
+        // Configuration
+        const CONFIG = {
+            GRAVITY: 0.6,
+            JUMP_POWER: -15,
+            GROUND_LEVEL: 20,
+            PLAYER_SIZE: 40,
+            SPAWN_RATE: 60,
+            MIN_SPAWN_RATE: 30,
+            BASE_OBSTACLE_SPEED: 8,
+            PLAYER_X: 50
+        };
+
+        // DOM Elements
         const gameContainer = document.getElementById('gameContainer');
         const player = document.getElementById('player');
         const scoreDisplay = document.getElementById('score');
+        const difficultyDisplay = document.getElementById('difficulty');
         const gameOverScreen = document.getElementById('gameOver');
+        const pauseScreen = document.getElementById('pauseScreen');
         const finalScoreDisplay = document.getElementById('finalScore');
         const restartBtn = document.getElementById('restartBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
 
         // Game variables
         let playerY = 100;
         let playerVelocity = 0;
-        const gravity = 0.6;
-        const jumpPower = -15;
-        const groundLevel = 20;
         let isJumping = false;
         let score = 0;
         let gameOver = false;
+        let isPaused = false;
         let difficulty = 1;
+        let lastJumpTime = 0;
+        let obstacleSpawnTimer = 0;
 
         // Input handling
         document.addEventListener('keydown', (e) => {
@@ -175,28 +257,52 @@
                 e.preventDefault();
                 jump();
             }
+            if (e.code === 'KeyP') {
+                togglePause();
+            }
         });
 
         gameContainer.addEventListener('click', () => {
-            if (!gameOver) {
+            if (!gameOver && !isPaused) {
                 jump();
+            } else if (isPaused) {
+                togglePause();
             }
         });
 
-        function jump() {
-            if (!isJumping) {
-                playerVelocity = jumpPower;
-                isJumping = true;
+        gameContainer.addEventListener('touchstart', () => {
+            if (!gameOver && !isPaused) {
+                jump();
+            } else if (isPaused) {
+                togglePause();
             }
+        });
+
+        pauseBtn.addEventListener('click', togglePause);
+
+        function jump() {
+            if (!isJumping && Date.now() - lastJumpTime > 100) {
+                playerVelocity = CONFIG.JUMP_POWER;
+                isJumping = true;
+                lastJumpTime = Date.now();
+            }
+        }
+
+        function togglePause() {
+            if (gameOver) return;
+            isPaused = !isPaused;
+            pauseScreen.style.display = isPaused ? 'block' : 'none';
+            pauseBtn.textContent = isPaused ? 'Resume (P)' : 'Pause (P)';
         }
 
         // Update player physics
         function updatePlayer() {
-            playerVelocity += gravity;
+            playerVelocity += CONFIG.GRAVITY;
             playerY += playerVelocity;
 
-            if (playerY >= gameContainer.clientHeight - groundLevel - 40) {
-                playerY = gameContainer.clientHeight - groundLevel - 40;
+            const maxY = gameContainer.clientHeight - CONFIG.GROUND_LEVEL - CONFIG.PLAYER_SIZE;
+            if (playerY >= maxY) {
+                playerY = maxY;
                 isJumping = false;
                 playerVelocity = 0;
             }
@@ -231,9 +337,12 @@
             let obstacleX = gameContainer.clientWidth;
 
             const moveObstacle = () => {
-                if (gameOver) return;
+                if (gameOver || isPaused) {
+                    requestAnimationFrame(moveObstacle);
+                    return;
+                }
 
-                obstacleX -= 8 + difficulty;
+                obstacleX -= CONFIG.BASE_OBSTACLE_SPEED + difficulty;
 
                 if (obstacleX < -width) {
                     obstacle.remove();
@@ -243,6 +352,7 @@
                     // Increase difficulty
                     if (score % 100 === 0) {
                         difficulty += 0.5;
+                        difficultyDisplay.textContent = 'Difficulty: ' + difficulty.toFixed(1) + 'x';
                     }
                     
                     return;
@@ -262,10 +372,10 @@
         }
 
         function checkCollision(obstacle, obstacleX, obstacleWidth, obstacleHeight) {
-            const playerX = 50;
-            const playerSize = 40;
-            const playerBottomY = gameContainer.clientHeight - groundLevel - playerY - playerSize;
-            const obstacleBottomY = gameContainer.clientHeight - groundLevel - obstacleHeight;
+            const playerX = CONFIG.PLAYER_X;
+            const playerSize = CONFIG.PLAYER_SIZE;
+            const playerBottomY = gameContainer.clientHeight - CONFIG.GROUND_LEVEL - playerY - playerSize;
+            const obstacleBottomY = gameContainer.clientHeight - CONFIG.GROUND_LEVEL - obstacleHeight;
 
             return (
                 playerX < obstacleX + obstacleWidth &&
@@ -279,6 +389,8 @@
             gameOver = true;
             gameOverScreen.style.display = 'block';
             finalScoreDisplay.textContent = score;
+            gameContainer.classList.add('shake');
+            setTimeout(() => gameContainer.classList.remove('shake'), 200);
         }
 
         function restart() {
@@ -287,9 +399,14 @@
             isJumping = false;
             score = 0;
             gameOver = false;
+            isPaused = false;
             difficulty = 1;
+            obstacleSpawnTimer = 0;
             scoreDisplay.textContent = 'Score: 0';
+            difficultyDisplay.textContent = 'Difficulty: 1.0x';
             gameOverScreen.style.display = 'none';
+            pauseScreen.style.display = 'none';
+            pauseBtn.textContent = 'Pause (P)';
 
             // Remove all obstacles
             const obstacles = document.querySelectorAll('.obstacle');
@@ -300,15 +417,17 @@
 
         restartBtn.addEventListener('click', restart);
 
-        let obstacleSpawnTimer = 0;
         function gameLoop() {
             if (!gameOver) {
-                updatePlayer();
+                if (!isPaused) {
+                    updatePlayer();
 
-                obstacleSpawnTimer++;
-                if (obstacleSpawnTimer > Math.max(60 - difficulty * 5, 30)) {
-                    spawnObstacle();
-                    obstacleSpawnTimer = 0;
+                    obstacleSpawnTimer++;
+                    const spawnRate = Math.max(CONFIG.SPAWN_RATE - difficulty * 5, CONFIG.MIN_SPAWN_RATE);
+                    if (obstacleSpawnTimer > spawnRate) {
+                        spawnObstacle();
+                        obstacleSpawnTimer = 0;
+                    }
                 }
 
                 requestAnimationFrame(gameLoop);
